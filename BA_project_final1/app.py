@@ -10,35 +10,31 @@ import plotly.express as px
 import plotly.graph_objects as go
 import re
 
-# Job Category Rules - Define keyword patterns for job categories
-JOB_CATEGORY_RULES = {
-    'Technology': {
-        'keywords': ['software', 'coding', 'programming', 'developer', 'tech', 'technology', 'data science',
-                     'machine learning', 'AI', 'artificial intelligence', 'cybersecurity', 'cloud', 'devops'],
-        'patterns': [r'\b(software\s*(developer|engineer))', r'\b(data\s*(scientist|analyst))',
-                     r'\b(cyber\s*security)', r'\b(cloud\s*(computing|engineer))'],
-        'category': 'Technology Roles'
+# Text Category Rules - Define keyword patterns for general text categories
+TEXT_CATEGORY_RULES = {
+    'Positive': {
+        'keywords': ['good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 'happy',
+                     'satisfied', 'love', 'best', 'perfect', 'awesome', 'helpful', 'beneficial'],
+        'patterns': [r'\b(positive\s*experience)', r'\b(highly\s*satisfied)', r'\b(great\s*learning)'],
+        'category': 'Positive Feedback'
     },
-    'Business': {
-        'keywords': ['management', 'business', 'marketing', 'finance', 'project manager', 'operations',
-                     'strategy', 'sales', 'consulting', 'leadership', 'analytics'],
-        'patterns': [r'\b(project\s*manager)', r'\b(business\s*(analyst|development))',
-                     r'\b(finance\s*manager)', r'\b(marketing\s*(manager|coordinator))'],
-        'category': 'Business & Management Roles'
+    'Critical': {
+        'keywords': ['bad', 'terrible', 'awful', 'horrible', 'worst', 'disappointed', 'frustrated',
+                     'difficult', 'challenging', 'problems', 'critical', 'concerning', 'inadequate'],
+        'patterns': [r'\b(poor\s*experience)', r'\b(dissatisfied)', r'\b(needs\s*improvement)'],
+        'category': 'Critical Feedback'
     },
-    'Creative': {
-        'keywords': ['design', 'creative', 'arts', 'graphic', 'ux', 'ui', 'content', 'media',
-                     'writing', 'video', 'photography', 'branding'],
-        'patterns': [r'\b(ux\s*/\s*ui)', r'\b(graphic\s*design)', r'\b(content\s*(creator|manager))',
-                     r'\b(digital\s*media)'],
-        'category': 'Creative & Arts Roles'
+    'Skill': {
+        'keywords': ['skill', 'learn', 'training', 'development', 'education', 'upskill', 'course',
+                     'certification', 'study', 'improve', 'knowledge'],
+        'patterns': [r'\b(skill\s*development)', r'\b(learn(ing)?\s*new)', r'\b(seek\s*training)'],
+        'category': 'Skill Development Focus'
     },
-    'Transition': {
-        'keywords': ['career change', 'new field', 'transition', 'retraining', 'upskilling',
-                     'new opportunity', 'jobless', 'unemployed', 'new skills'],
-        'patterns': [r'\b(career\s*(change|transition))', r'\b(new\s*(field|opportunity))',
-                     r'\b(upskill(ing)?)'],
-        'category': 'Career Transition Roles'
+    'Inquiry': {
+        'keywords': ['question', 'inquiry', 'wonder', 'curious', 'information', 'details', 'ask',
+                     'explore', 'interested', 'seek'],
+        'patterns': [r'\b(have\s*a\s*question)', r'\b(looking\s*for\s*information)', r'\b(curious\s*about)'],
+        'category': 'General Inquiry'
     }
 }
 
@@ -175,57 +171,54 @@ def analyze_sentiment_enhanced(text, sentiment_model, sentiment_vectorizer):
             return "Neutral", confidence, 0.0
 
 
-def rule_based_job_classification(text):
-    """Rule-based classification for job categories based on text input"""
+def rule_based_text_classification(text):
+    """Rule-based classification for general text categories"""
     if not text or text.strip() == "":
         return "Uncategorized", 0.0
 
     text_lower = text.lower()
     category_scores = {}
 
-    for category, rules in JOB_CATEGORY_RULES.items():
+    for category, rules in TEXT_CATEGORY_RULES.items():
         score = 0
-        # Keyword matching
         for keyword in rules['keywords']:
             if keyword in text_lower:
-                score += 0.3  # Base score for keyword match
-
-        # Pattern matching
+                score += 0.3
         for pattern in rules['patterns']:
             if re.search(pattern, text_lower, re.IGNORECASE):
-                score += 0.5  # Higher score for pattern match
-
+                score += 0.5
         category_scores[category] = score
 
-    # Find the category with the highest score
     if not category_scores or max(category_scores.values()) == 0:
         return "Uncategorized", 0.0
 
     best_category = max(category_scores, key=category_scores.get)
     confidence = min(1.0, category_scores[best_category])
 
-    return JOB_CATEGORY_RULES[best_category]['category'], confidence
+    return TEXT_CATEGORY_RULES[best_category]['category'], confidence
 
 
-def hybrid_job_classification(text, sentiment_model, sentiment_vectorizer):
+def hybrid_text_classification(text, sentiment_model, sentiment_vectorizer):
     """Hybrid approach combining rule-based and ML-based classification"""
-    # Get rule-based classification
-    rule_category, rule_confidence = rule_based_job_classification(text)
-
-    # Get sentiment analysis
+    rule_category, rule_confidence = rule_based_text_classification(text)
     sentiment_label, sentiment_confidence, _ = analyze_sentiment_enhanced(text, sentiment_model, sentiment_vectorizer)
 
-    # Combine results with weighted scoring
     final_category = rule_category
     final_confidence = rule_confidence
 
     # Adjust based on sentiment
-    if sentiment_label == "Critical" and rule_category != "Career Transition Roles":
-        # If sentiment is critical, increase likelihood of transition category
-        transition_score = JOB_CATEGORY_RULES['Transition']['keywords'].count(text.lower()) * 0.3
-        if transition_score > rule_confidence:
-            final_category = "Career Transition Roles"
-            final_confidence = transition_score
+    if sentiment_label == "Critical" and rule_category != "Critical Feedback":
+        critical_score = sum(
+            1 for keyword in TEXT_CATEGORY_RULES['Critical']['keywords'] if keyword in text.lower()) * 0.3
+        if critical_score > rule_confidence:
+            final_category = "Critical Feedback"
+            final_confidence = critical_score
+    elif sentiment_label == "Constructive" and rule_category != "Positive Feedback":
+        positive_score = sum(
+            1 for keyword in TEXT_CATEGORY_RULES['Positive']['keywords'] if keyword in text.lower()) * 0.3
+        if positive_score > rule_confidence:
+            final_category = "Positive Feedback"
+            final_confidence = positive_score
 
     return final_category, final_confidence
 
@@ -265,240 +258,130 @@ def create_sentiment_visualization(sentiment_label, confidence, polarity):
     return fig_gauge
 
 
-# Enhanced cluster characteristics (unchanged)
+# Updated cluster characteristics without job roles
 CLUSTER_FEATURES = {
     0: {
         "name": "Tech-Savvy Graduates",
         "characteristics": [
             "Primarily STEM backgrounds",
-            "High employment rate in tech sector",
-            "Positive sentiment towards career prospects",
-            "Focus on innovation and technology topics"
+            "High engagement in tech-related topics",
+            "Positive sentiment towards learning",
+            "Focus on innovation and technology"
         ],
-        "dominant_topics": ["Technology", "Innovation", "Career Growth"],
-        "employment_outlook": "Excellent",
+        "dominant_topics": ["Technology", "Innovation", "Learning"],
+        "engagement_level": "High",
         "sentiment_trend": "Positive",
-        "recommended_jobs": [
-            {"title": "Software Developer"},
-            {"title": "Data Scientist"},
-            {"title": "Cybersecurity Analyst"}
-        ],
-        "skill_recommendations": [
-            {"skill": "Cloud Computing (AWS/Azure)", "priority": "High", "reason": "Essential for modern tech roles"},
-            {"skill": "Machine Learning/AI", "priority": "High", "reason": "Rapidly growing field with high demand"},
-            {"skill": "DevOps & CI/CD", "priority": "Medium", "reason": "Critical for software development lifecycle"}
+        "recommended_resources": [
+            {"resource": "Coursera (Tech Courses)", "priority": "High",
+             "reason": "Access to cutting-edge tech courses"},
+            {"resource": "Udacity (Nano Degrees)", "priority": "High", "reason": "Specialized tech certifications"},
+            {"resource": "Pluralsight", "priority": "Medium", "reason": "Practical tech skill development"}
         ]
     },
     1: {
-        "name": "Business & Management Professionals",
+        "name": "Business & Management Students",
         "characteristics": [
             "Business and management education",
-            "Mixed employment status",
-            "Neutral to positive career sentiment",
-            "Focus on leadership and business strategy"
+            "Moderate engagement in strategic topics",
+            "Neutral to positive learning sentiment",
+            "Focus on leadership and strategy"
         ],
-        "dominant_topics": ["Management", "Leadership", "Business Strategy"],
-        "employment_outlook": "Good",
+        "dominant_topics": ["Management", "Leadership", "Strategy"],
+        "engagement_level": "Good",
         "sentiment_trend": "Neutral-Positive",
-        "recommended_jobs": [
-            {"title": "Project Manager"},
-            {"title": "Business Analyst"},
-            {"title": "Digital Marketing Manager"}
-        ],
-        "skill_recommendations": [
-            {"skill": "Data Analytics & Visualization", "priority": "High",
-             "reason": "Data-driven decision making is crucial"},
-            {"skill": "Agile/Scrum Methodology", "priority": "High", "reason": "Standard in modern project management"},
-            {"skill": "Digital Marketing & SEO", "priority": "Medium",
-             "reason": "Essential for business growth in digital age"}
+        "recommended_resources": [
+            {"resource": "LinkedIn Learning (Business)", "priority": "High",
+             "reason": "Leadership and strategy courses"},
+            {"resource": "Coursera (Business)", "priority": "High", "reason": "Data-driven decision-making skills"},
+            {"resource": "Harvard Business Review", "priority": "Medium", "reason": "Industry insights and trends"}
         ]
     },
     2: {
-        "name": "Creative & Arts Graduates",
+        "name": "Creative & Arts Students",
         "characteristics": [
             "Arts and humanities background",
-            "Variable employment patterns",
-            "Mixed sentiment about job market",
-            "Focus on creativity and self-expression"
+            "Variable engagement patterns",
+            "Mixed sentiment about learning",
+            "Focus on creativity and expression"
         ],
         "dominant_topics": ["Creativity", "Expression", "Culture"],
-        "employment_outlook": "Moderate",
+        "engagement_level": "Moderate",
         "sentiment_trend": "Mixed",
-        "recommended_jobs": [
-            {"title": "UX/UI Designer"},
-            {"title": "Content Creator/Manager"},
-            {"title": "Digital Media Specialist"}
-        ],
-        "skill_recommendations": [
-            {"skill": "UI/UX Design Tools (Figma, Adobe XD)", "priority": "High",
-             "reason": "High demand in digital product development"},
-            {"skill": "Video Production & Editing", "priority": "High",
-             "reason": "Growing demand in content marketing"},
-            {"skill": "Social Media Analytics", "priority": "Medium",
-             "reason": "Essential for measuring creative impact"}
+        "recommended_resources": [
+            {"resource": "Skillshare", "priority": "High", "reason": "Creative skill development"},
+            {"resource": "Adobe Creative Cloud Tutorials", "priority": "High", "reason": "Industry-standard tools"},
+            {"resource": "Domestika", "priority": "Medium", "reason": "Creative project-based learning"}
         ]
     },
     3: {
-        "name": "Career Transitioners",
+        "name": "Diverse Learners",
         "characteristics": [
             "Diverse educational backgrounds",
-            "Currently seeking new opportunities",
+            "Seeking new learning opportunities",
             "Cautious optimism about future",
-            "Focus on skill development and adaptation"
+            "Focus on skill development"
         ],
-        "dominant_topics": ["Career Change", "Skill Development", "Adaptation"],
-        "employment_outlook": "Improving",
+        "dominant_topics": ["Learning", "Skill Development", "Adaptation"],
+        "engagement_level": "Improving",
         "sentiment_trend": "Cautiously Optimistic",
-        "recommended_jobs": [
-            {"title": "Business Development Representative"},
-            {"title": "Training & Development Specialist"},
-            {"title": "Operations Manager"}
-        ],
-        "skill_recommendations": [
-            {"skill": "Professional Networking & LinkedIn", "priority": "High",
-             "reason": "Critical for career transition success"},
-            {"skill": "Certification in New Field", "priority": "High",
-             "reason": "Validates expertise in target industry"},
-            {"skill": "Cross-functional Communication", "priority": "Medium",
-             "reason": "Essential for adapting to new work environments"}
+        "recommended_resources": [
+            {"resource": "Khan Academy", "priority": "High", "reason": "Broad range of free courses"},
+            {"resource": "edX", "priority": "High", "reason": "University-level courses"},
+            {"resource": "YouTube Learning Channels", "priority": "Medium", "reason": "Accessible learning content"}
         ]
     }
 }
 
-# Job market insights (unchanged)
-JOB_FIELD_MAPPING = {
-    ("Science & Technology", "Bachelor's Degree"): [
-        {"title": "Junior Software Engineer", "growth": "22%", "avg_salary": "$72,000"},
-        {"title": "Quality Assurance Analyst", "growth": "10%", "avg_salary": "$55,570"},
-        {"title": "Technical Support Specialist", "growth": "8%", "avg_salary": "$54,760"}
-    ],
-    ("Science & Technology", "Postgraduate Degree"): [
-        {"title": "Senior Data Scientist", "growth": "35%", "avg_salary": "$126,830"},
-        {"title": "Research Scientist", "growth": "8%", "avg_salary": "$89,220"},
-        {"title": "Solutions Architect", "growth": "25%", "avg_salary": "$134,730"}
-    ],
-    ("Business & Management", "Bachelor's Degree"): [
-        {"title": "Sales Representative", "growth": "4%", "avg_salary": "$56,152"},
-        {"title": "Human Resources Specialist", "growth": "10%", "avg_salary": "$63,490"},
-        {"title": "Marketing Coordinator", "growth": "18%", "avg_salary": "$46,680"}
-    ],
-    ("Business & Management", "Postgraduate Degree"): [
-        {"title": "Management Consultant", "growth": "14%", "avg_salary": "$87,660"},
-        {"title": "Finance Manager", "growth": "17%", "avg_salary": "$134,180"},
-        {"title": "Operations Director", "growth": "9%", "avg_salary": "$125,660"}
-    ],
-    ("Arts", "Bachelor's Degree"): [
-        {"title": "Graphic Designer", "growth": "3%", "avg_salary": "$47,640"},
-        {"title": "Social Media Coordinator", "growth": "17%", "avg_salary": "$41,000"},
-        {"title": "Content Writer", "growth": "12%", "avg_salary": "$48,250"}
-    ],
-    ("Arts", "Postgraduate Degree"): [
-        {"title": "Creative Director", "growth": "11%", "avg_salary": "$97,270"},
-        {"title": "Art Director", "growth": "11%", "avg_salary": "$94,220"},
-        {"title": "Museum Curator", "growth": "13%", "avg_salary": "$54,560"}
-    ],
-    ("Science & Technology", "Diploma"): [
-        {"title": "Web Developer (Entry-Level)", "growth": "22%", "avg_salary": "$72,000"},
-        {"title": "Electronics Technician", "growth": "10%", "avg_salary": "$55,570"},
-        {"title": "Lab Technician", "growth": "8%", "avg_salary": "$54,760"}
-    ],
-    ("Business & Management", "Diploma"): [
-        {"title": "Marketing Assistant", "growth": "4%", "avg_salary": "$56,152"},
-        {"title": "Business Development Executive", "growth": "10%", "avg_salary": "$63,490"},
-        {"title": "Project Coordinator", "growth": "18%", "avg_salary": "$46,680"}
-    ],
-    ("Arts", "Diploma"): [
-        {"title": "Administrative Assistant", "growth": "11%", "avg_salary": "$97,270"},
-        {"title": "Public Relations Assistant", "growth": "11%", "avg_salary": "$94,220"},
-        {"title": "Photographer / Videographer", "growth": "13%", "avg_salary": "$54,560"}
-    ],
-    ("Science & Technology", "Other"): [
-        {"title": "Freelance Content Moderator", "growth": "22%", "avg_salary": "$72,000"},
-        {"title": "Environmental Scientist", "growth": "10%", "avg_salary": "$55,570"},
-        {"title": "Software Developer", "growth": "8%", "avg_salary": "$54,760"}
-    ],
-    ("Business & Management", "Other"): [
-        {"title": "Entrepreneur", "growth": "4%", "avg_salary": "$56,152"},
-        {"title": "Accountant", "growth": "10%", "avg_salary": "$63,490"},
-        {"title": "Marketing Coordinator", "growth": "18%", "avg_salary": "$46,680"}
-    ],
-    ("Arts", "Other"): [
-        {"title": "Graphic Designer", "growth": "11%", "avg_salary": "$97,270"},
-        {"title": "Concept Artist", "growth": "11%", "avg_salary": "$94,220"},
-        {"title": "Photographer", "growth": "13%", "avg_salary": "$54,560"}
-    ]
 
-}
-
-
-def get_personalized_recommendations(age, education, field, employment_status, sentiment, cluster_id, job_category):
-    """Generate personalized job and skill recommendations with job category consideration"""
+def get_personalized_recommendations(age, education, field, sentiment, cluster_id, text_category):
+    """Generate personalized learning recommendations based on profile and text category"""
     cluster_info = CLUSTER_FEATURES.get(cluster_id, CLUSTER_FEATURES[0])
-    base_jobs = cluster_info["recommended_jobs"]
-    base_skills = cluster_info["skill_recommendations"]
-    field_jobs = JOB_FIELD_MAPPING.get((field, education), [])
+    base_resources = cluster_info["recommended_resources"]
 
-    all_jobs = base_jobs + field_jobs
+    enhanced_resources = base_resources.copy()
 
-    # Adjust recommendations based on job category
-    if job_category != "Uncategorized":
-        category_specific_jobs = [
-            job for job in all_jobs if any(keyword in job['title'].lower()
-                                           for keyword in JOB_CATEGORY_RULES[job_category.split()[0]]['keywords'])
-        ]
-        if category_specific_jobs:
-            all_jobs = category_specific_jobs + all_jobs[:2]  # Prioritize category-specific jobs
-
-    if employment_status == "No":
-        entry_level_jobs = [
-            {"title": "Internship Programs", "growth": "15%", "avg_salary": "$35,000"},
-            {"title": "Graduate Trainee", "growth": "12%", "avg_salary": "$42,000"},
-            {"title": "Junior Analyst", "growth": "18%", "avg_salary": "$48,500"}
-        ]
-        all_jobs.extend(entry_level_jobs)
-
-    enhanced_skills = base_skills.copy()
-    if sentiment == "Critical" or employment_status == "No":
-        enhanced_skills.append({
-            "skill": "Interview & Resume Building",
+    if sentiment == "Critical" or text_category == "Critical Feedback":
+        enhanced_resources.append({
+            "resource": "Online Counseling Platforms",
             "priority": "High",
-            "reason": "Essential for job search success"
+            "reason": "Support for addressing challenges"
+        })
+
+    if text_category == "Skill Development Focus":
+        enhanced_resources.append({
+            "resource": "Specialized Certification Courses",
+            "priority": "High",
+            "reason": "Targeted skill enhancement"
         })
 
     if age in ["31–35", "36+"]:
-        enhanced_skills.append({
-            "skill": "Leadership & Management",
+        enhanced_resources.append({
+            "resource": "Advanced Leadership Courses",
             "priority": "Medium",
-            "reason": "Valuable for senior-level positions"
+            "reason": "Valuable for experienced learners"
         })
 
-    # Add category-specific skills
-    if job_category != "Uncategorized":
-        category_key = job_category.split()[0]
-        if category_key == 'Technology':
-            enhanced_skills.append(
-                {"skill": "Python Programming", "priority": "High", "reason": "Essential for tech roles"})
-        elif category_key == 'Business':
-            enhanced_skills.append(
-                {"skill": "Business Strategy", "priority": "High", "reason": "Key for management roles"})
-        elif category_key == 'Creative':
-            enhanced_skills.append(
-                {"skill": "Adobe Creative Suite", "priority": "High", "reason": "Standard for creative roles"})
+    if text_category == "Positive Feedback":
+        enhanced_resources.append({
+            "resource": "Advanced Specialization Courses",
+            "priority": "Medium",
+            "reason": "Build on positive experiences"
+        })
 
-    unique_jobs = []
-    seen_titles = set()
-    for job in all_jobs:
-        if job["title"] not in seen_titles:
-            unique_jobs.append(job)
-            seen_titles.add(job["title"])
+    unique_resources = []
+    seen_resources = set()
+    for resource in enhanced_resources:
+        if resource["resource"] not in seen_resources:
+            unique_resources.append(resource)
+            seen_resources.add(resource["resource"])
 
-    return unique_jobs[:3], enhanced_skills[:4]
+    return unique_resources[:4]
 
 
 # App Configuration
 st.set_page_config(page_title="Graduate Intelligence Dashboard", layout="wide", initial_sidebar_state="expanded")
 
-# Custom CSS (unchanged)
+# Custom CSS
 st.markdown("""
 <style>
     .main-header {
@@ -523,14 +406,7 @@ st.markdown("""
         border: 1px solid #bbdefb;
         margin: 1rem 0;
     }
-    .job-card {
-        background: #0d6114;
-        padding: 1rem;
-        border-radius: 8px;
-        border-left: 4px solid #4caf50;
-        margin: 0.5rem 0;
-    }
-    .skill-card {
+    .resource-card {
         background: #0d6114;
         padding: 1rem;
         border-radius: 8px;
@@ -549,11 +425,11 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Main Header (unchanged)
+# Main Header
 st.markdown("""
 <div class="main-header">
     <h1>Workforce Readiness Intelligence Dashboard</h1>
-    <p>Comprehensive Analysis: Sentiment • Topics • Recommendations • Career Guidance • Skill Development</p>
+    <p>Comprehensive Analysis: Sentiment • Topics • Recommendations • Learning Guidance</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -575,17 +451,16 @@ with col1:
         st.markdown("#### Personal Details")
         age = st.selectbox("Age Range", ["18–24", "25–30", "31–35", "36+"])
         gender = st.selectbox("Gender", ["Male", "Female", "Other"])
-        st.markdown("#### Education & Career")
+        st.markdown("#### Education")
         education = st.selectbox("Education Level",
                                  ["Bachelor's Degree", "Postgraduate Degree", "Diploma", "Other"])
         field_of_study = st.selectbox("Field of Study",
                                       ["Science & Technology", "Business & Management", "Arts", "Other"])
-        currently_employed = st.selectbox("Employment Status", ["Yes", "No"])
         st.markdown("#### Your Thoughts & Goals")
         feedback_text = st.text_area("Share your feedback about your educational experience:",
                                      placeholder="Tell us about your overall experience, challenges, and thoughts...")
-        career_description = st.text_area("Describe your career goals and background:",
-                                          placeholder="Describe your field, career goals, and aspirations...")
+        learning_goals = st.text_area("Describe your learning goals and background:",
+                                      placeholder="Describe your field, learning goals, and aspirations...")
         topic_text = st.text_area("Share any additional thoughts or responses:",
                                   placeholder="Any other thoughts, concerns, or topics you'd like to discuss...")
         submitted = st.form_submit_button("🚀 Analyze My Profile", use_container_width=True)
@@ -594,7 +469,7 @@ with col2:
     st.markdown("### 📊 Analysis Results")
     if submitted:
         tab1, tab2, tab3, tab4, tab5 = st.tabs(
-            [" 📈 Overview", " 💭 Sentiment", " 🧠 Topics", " 🎯 Segment", " 💼 Career Guidance"])
+            [" 📈 Overview", " 💭 Sentiment", " 🧠 Topics", " 🎯 Segment", " 📚 Learning Guidance"])
 
         with tab1:
             st.markdown("#### 🔍 Comprehensive Analysis Overview")
@@ -613,13 +488,13 @@ with col2:
                     results['sentiment_confidence'] = 0.0
                     results['sentiment_polarity'] = 0.0
 
-            # Job Category Classification
-            combined_text = (feedback_text + " " + career_description + " " + topic_text).strip()
+            # Text Category Classification
+            combined_text = (feedback_text + " " + learning_goals + " " + topic_text).strip()
             if combined_text:
-                job_category, job_confidence = hybrid_job_classification(combined_text, sentiment_model,
-                                                                         sentiment_vectorizer)
-                results['job_category'] = job_category
-                results['job_confidence'] = job_confidence
+                text_category, text_confidence = hybrid_text_classification(combined_text, sentiment_model,
+                                                                            sentiment_vectorizer)
+                results['text_category'] = text_category
+                results['text_confidence'] = text_confidence
 
             # Topic Analysis
             if topic_text:
@@ -638,11 +513,11 @@ with col2:
             # Segmentation
             try:
                 expected_seg_columns = list(segmentation_encoders.keys())
-                user_values = [age, gender, education, field_of_study, currently_employed]
+                user_values = [age, gender, education, field_of_study, "Yes"]  # Default employment to Yes
                 if len(expected_seg_columns) == len(user_values):
                     user_input = pd.DataFrame([user_values], columns=expected_seg_columns)
                 else:
-                    user_input = pd.DataFrame([[age, gender, education, field_of_study, currently_employed]],
+                    user_input = pd.DataFrame([[age, gender, education, field_of_study, "Yes"]],
                                               columns=["Age", "Gender", "Education", "Field", "Employed"])
                 for col in user_input.columns:
                     if col in segmentation_encoders:
@@ -659,23 +534,19 @@ with col2:
                     results['cluster'] = 1
                 elif field_of_study == "Arts":
                     results['cluster'] = 2
-                elif age in ["31–35", "36+"] or currently_employed == "No":
-                    results['cluster'] = 3
                 else:
-                    user_hash = hash(f"{age}-{gender}-{education}-{field_of_study}-{currently_employed}")
-                    results['cluster'] = abs(user_hash) % 4
+                    results['cluster'] = 3
 
             # Display overview metrics
             col_metrics = st.columns(4)
             with col_metrics[0]:
                 st.metric("Sentiment", results.get('sentiment', 'N/A'))
             with col_metrics[1]:
-                employment_display = "Yes" if currently_employed == "Yes" else "No"
-                st.metric("Currently Employed", employment_display)
+                st.metric("Text Category", results.get('text_category', 'N/A'))
             with col_metrics[2]:
                 st.metric("Dominant Topic", results.get('topic', 'N/A'))
             with col_metrics[3]:
-                st.metric("Job Category", results.get('job_category', 'N/A'))
+                st.metric("Cluster", f"Cluster {results.get('cluster', 0)}")
 
             if 'cluster' in results:
                 cluster_id = results['cluster']
@@ -684,9 +555,9 @@ with col2:
                     st.markdown(f"""
                     <div class="cluster-info">
                         <h3>🎯 Your Segment: {cluster_info['name']}</h3>
-                        <p><strong>Employment Outlook:</strong> {cluster_info['employment_outlook']}</p>
+                        <p><strong>Engagement Level:</strong> {cluster_info['engagement_level']}</p>
                         <p><strong>Sentiment Trend:</strong> {cluster_info['sentiment_trend']}</p>
-                        <p><strong>Job Category:</strong> {results.get('job_category', 'N/A')}</p>
+                        <p><strong>Text Category:</strong> {results.get('text_category', 'N/A')}</p>
                     </div>
                     """, unsafe_allow_html=True)
 
@@ -699,8 +570,8 @@ with col2:
                 st.plotly_chart(fig, use_container_width=True)
                 st.success(f"**Detected Sentiment:** {sentiment}")
                 interpretations = {
-                    'Positive': "Your feedback shows optimism and satisfaction with your educational journey.",
-                    'Negative': "Your feedback indicates some concerns or challenges in your experience.",
+                    'Constructive': "Your feedback shows optimism and satisfaction with your educational journey.",
+                    'Critical': "Your feedback indicates some concerns or challenges in your experience.",
                     'Neutral': "Your feedback shows a balanced perspective on your educational experience."
                 }
                 st.info(interpretations.get(sentiment, "Unable to interpret sentiment."))
@@ -728,7 +599,7 @@ with col2:
             if 'cluster' in results:
                 cluster_id = results['cluster']
                 try:
-                    user_input_rec = pd.DataFrame([[age, gender, education, field_of_study, currently_employed]],
+                    user_input_rec = pd.DataFrame([[age, gender, education, field_of_study, "Yes"]],
                                                   columns=recommender_data.columns)
                     for col in user_input_rec.columns:
                         le = recommender_encoders[col]
@@ -753,7 +624,7 @@ with col2:
                         st.markdown("**Common Topics of Interest:**")
                         for topic in cluster_info['dominant_topics']:
                             st.write(f"• {topic}")
-                    metrics = ['Employment Outlook', 'Sentiment', 'Career Satisfaction', 'Skill Match',
+                    metrics = ['Engagement Level', 'Sentiment', 'Learning Satisfaction', 'Skill Match',
                                'Network Strength']
                     cluster_scores = {
                         0: [0.9, 0.8, 0.85, 0.9, 0.7],
@@ -777,83 +648,74 @@ with col2:
                     st.plotly_chart(fig, use_container_width=True)
 
         with tab5:
-            st.markdown("#### 💼 Personalized Career Guidance")
-            if 'cluster' in results and 'job_category' in results:
+            st.markdown("#### 📚 Personalized Learning Guidance")
+            if 'cluster' in results and 'text_category' in results:
                 cluster_id = results['cluster']
                 user_sentiment = results.get('sentiment', 'Neutral')
-                job_category = results.get('job_category', 'Uncategorized')
-                recommended_jobs, recommended_skills = get_personalized_recommendations(
-                    age, education, field_of_study, currently_employed, user_sentiment, cluster_id, job_category
+                text_category = results.get('text_category', 'Uncategorized')
+                recommended_resources = get_personalized_recommendations(
+                    age, education, field_of_study, user_sentiment, cluster_id, text_category
                 )
-                st.markdown("### 🎯 Recommended Job Fields for You")
-                st.markdown(f"*Based on your profile, education, and detected job category: {job_category}*")
-                for i, job in enumerate(recommended_jobs, 1):
+                st.markdown("### 🚀 Recommended Learning Resources")
+                st.markdown(f"*Based on your profile and detected text category: {text_category}*")
+                for i, resource in enumerate(recommended_resources, 1):
+                    priority_class = f"priority-{resource['priority'].lower()}"
                     st.markdown(f"""
-                    <div class="job-card">
-                        <h4>{i}. {job['title']}</h4>
+                    <div class="resource-card">
+                        <h4>{i}. {resource['resource']} <span class="{priority_class}">({resource['priority']} Priority)</span></h4>
+                        <p><strong>Why important:</strong> {resource['reason']}</p>
                     </div>
                     """, unsafe_allow_html=True)
-                st.markdown("### 🚀 Skills You Should Develop")
-                st.markdown("*Priority skills to enhance your career prospects*")
-                for i, skill in enumerate(recommended_skills, 1):
-                    priority_class = f"priority-{skill['priority'].lower()}"
-                    st.markdown(f"""
-                    <div class="skill-card">
-                        <h4>{i}. {skill['skill']} <span class="{priority_class}">({skill['priority']} Priority)</span></h4>
-                        <p><strong>Why important:</strong> {skill['reason']}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                st.markdown("### 📊 Career Insights & Action Plan")
+                st.markdown("### 📊 Learning Insights & Action Plan")
                 col_insights = st.columns(2)
                 with col_insights[0]:
                     st.markdown("#### 💡 Immediate Actions")
-                    if currently_employed == "No":
-                        st.write("🔹 Focus on networking and job applications")
-                        st.write("🔹 Consider internships or contract work")
-                        st.write("🔹 Update LinkedIn profile and resume")
+                    if user_sentiment == "Critical" or text_category == "Critical Feedback":
+                        st.write("🔹 Explore support resources or counseling")
+                        st.write("🔹 Identify specific areas for improvement")
+                        st.write("🔹 Connect with peers or mentors")
                     else:
-                        st.write("🔹 Identify skill gaps for promotion")
-                        st.write("🔹 Seek mentorship opportunities")
-                        st.write("🔹 Build professional network in target roles")
-                    if user_sentiment == "Critical":
-                        st.write("🔹 Consider career counseling")
-                        st.write("🔹 Explore alternative career paths")
+                        st.write("🔹 Continue exploring advanced courses")
+                        st.write("🔹 Join relevant online communities")
+                        st.write("🔹 Build on existing strengths")
+                    if text_category == "Skill Development Focus":
+                        st.write("🔹 Enroll in targeted skill courses")
                 with col_insights[1]:
                     st.markdown("#### 📈 Long-term Strategy")
                     if age in ["18–24", "25–30"]:
-                        st.write("🔹 Build specialized expertise")
-                        st.write("🔹 Consider advanced certifications")
-                        st.write("🔹 Gain diverse project experience")
+                        st.write("🔹 Build foundational expertise")
+                        st.write("🔹 Explore diverse learning platforms")
+                        st.write("🔹 Gain practical experience through projects")
                     else:
-                        st.write("🔹 Develop leadership capabilities")
-                        st.write("🔹 Consider management roles")
-                        st.write("🔹 Leverage experience for consulting")
+                        st.write("🔹 Deepen specialized knowledge")
+                        st.write("🔹 Mentor others in your field")
+                        st.write("🔹 Stay updated with industry trends")
                     if education == "Bachelor's Degree":
                         st.write("🔹 Consider pursuing advanced degree")
-                st.markdown("#### 🌐 Industry Trends Relevant to You")
-                industry_trends = {
+                st.markdown("#### 🌐 Learning Trends Relevant to You")
+                learning_trends = {
                     "Science & Technology": [
-                        "AI and Machine Learning adoption accelerating",
-                        "Cloud computing skills in high demand",
-                        "Cybersecurity concerns driving job growth"
+                        "AI and machine learning courses in demand",
+                        "Cloud computing certifications growing",
+                        "Cybersecurity training increasingly relevant"
                     ],
                     "Business & Management": [
-                        "Digital transformation changing business roles",
-                        "Data-driven decision making becoming standard",
-                        "Remote work creating new management challenges"
+                        "Data analytics skills becoming essential",
+                        "Leadership courses gaining popularity",
+                        "Digital transformation driving new learning needs"
                     ],
                     "Arts": [
-                        "Digital content creation opportunities growing",
-                        "UX/UI design in high demand",
-                        "Personal branding becoming crucial"
+                        "Digital content creation courses growing",
+                        "UX/UI design training in high demand",
+                        "Creative software skills becoming crucial"
                     ],
                     "Other": [
-                        "Cross-functional skills increasingly valuable",
-                        "Continuous learning essential for career growth",
-                        "Networking more important than ever"
+                        "Interdisciplinary skills highly valued",
+                        "Continuous learning essential for growth",
+                        "Online learning platforms expanding access"
                     ]
                 }
-                trends = industry_trends.get(field_of_study, industry_trends["Other"])
+                trends = learning_trends.get(field_of_study, learning_trends["Other"])
                 for trend in trends:
                     st.write(f"📈 {trend}")
                 st.markdown("#### 📚 Recommended Learning Platforms")
@@ -870,29 +732,26 @@ with col2:
                         for resource in resources:
                             st.write(f"• {resource}")
             else:
-                st.warning("Please complete the analysis in other tabs first to see career guidance.")
+                st.warning("Please complete the analysis in other tabs first to see learning guidance.")
 
     else:
         st.info("👆 Fill in your information and click 'Analyze My Profile' to see comprehensive results!")
-        st.markdown("### 🎯 Sample Segment Profiles & Career Paths")
+        st.markdown("### 🎯 Sample Segment Profiles & Learning Paths")
         for cluster_id, info in CLUSTER_FEATURES.items():
             with st.expander(f"Cluster {cluster_id}: {info['name']}"):
-                col_info, col_career = st.columns(2)
+                col_info, col_resources = st.columns(2)
                 with col_info:
-                    st.write(f"**Employment Outlook:** {info['employment_outlook']}")
+                    st.write(f"**Engagement Level:** {info['engagement_level']}")
                     st.write(f"**Sentiment Trend:** {info['sentiment_trend']}")
                     st.write("**Characteristics:**")
                     for char in info['characteristics']:
                         st.write(f"• {char}")
-                with col_career:
-                    st.write("**Top Recommended Jobs:**")
-                    for job in info['recommended_jobs'][:2]:
-                        st.write(f"• {job['title']} ")
-                    st.write("**Key Skills to Develop:**")
-                    for skill in info['skill_recommendations'][:2]:
-                        st.write(f"• {skill['skill']} ({skill['priority']} Priority)")
+                with col_resources:
+                    st.write("**Top Recommended Resources:**")
+                    for resource in info['recommended_resources'][:2]:
+                        st.write(f"• {resource['resource']} ({resource['priority']} Priority)")
 
-# Footer (unchanged)
+# Footer
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666; padding: 1rem;">
